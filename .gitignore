@@ -29,3 +29,7 @@ dkms.conf
 # test-oriented
 client
 out
+
+# output information
+*.png
+*.txt
