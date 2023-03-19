@@ -113,9 +113,9 @@ static ssize_t fib_read(struct file *file,
     // return (ssize_t) fib_sequence(*offset);
     fib_kt = ktime_get();
     /* multiple method under test */
-    ssize_t ret = fib_sequence_fd_recur(*offset);
+    // ssize_t ret = fib_sequence_fd_recur(*offset);
     // ssize_t ret = fib_sequence_fd_iter(*offset);
-    // ssize_t ret = fib_sequence(*offset);
+    ssize_t ret = fib_sequence(*offset);
     fib_kt = ktime_sub(ktime_get(), fib_kt);
     return ret;
 }
@@ -127,7 +127,7 @@ static ssize_t fib_write(struct file *file,
                          loff_t *offset)
 {
     // return 1;
-    return (fib_kt);
+    return ktime_to_ns(fib_kt);
 }
 
 static loff_t fib_device_lseek(struct file *file, loff_t offset, int orig)
