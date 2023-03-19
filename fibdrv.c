@@ -4,6 +4,7 @@
 #include <linux/init.h>
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
+#include <linux/ktime.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 
@@ -23,6 +24,10 @@ static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
 static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
+
+// static DEFINE_KTIME(fib_kt);
+
+static ktime_t fib_kt;
 
 static long long fib_sequence_fd_iter(long long k)
 {
@@ -106,7 +111,13 @@ static ssize_t fib_read(struct file *file,
                         loff_t *offset)
 {
     // return (ssize_t) fib_sequence(*offset);
-    return (ssize_t) fib_sequence_fd_iter(*offset);
+    fib_kt = ktime_get();
+    /* multiple method under test */
+    ssize_t ret = fib_sequence_fd_recur(*offset);
+    // ssize_t ret = fib_sequence_fd_iter(*offset);
+    // ssize_t ret = fib_sequence(*offset);
+    fib_kt = ktime_sub(ktime_get(), fib_kt);
+    return ret;
 }
 
 /* write operation is skipped */
@@ -115,7 +126,8 @@ static ssize_t fib_write(struct file *file,
                          size_t size,
                          loff_t *offset)
 {
-    return 1;
+    // return 1;
+    return (fib_kt);
 }
 
 static loff_t fib_device_lseek(struct file *file, loff_t offset, int orig)
