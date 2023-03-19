@@ -46,5 +46,5 @@ check: all
 output:
 	$(MAKE) unload
 	$(MAKE) load
-	sudo ./measure > time_output/measure_time.txt
+	sudo taskset -c 0 ./measure > time_output/measure_time.txt
 	$(MAKE) unload
