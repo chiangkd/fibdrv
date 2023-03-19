@@ -9,7 +9,7 @@ PWD := $(shell pwd)
 
 GIT_HOOKS := .git/hooks/applied
 
-all: $(GIT_HOOKS) client
+all: $(GIT_HOOKS) client measure
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 $(GIT_HOOKS):
@@ -18,13 +18,16 @@ $(GIT_HOOKS):
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	$(RM) client out
+	$(RM) client out measure
 load:
 	sudo insmod $(TARGET_MODULE).ko
 unload:
 	sudo rmmod $(TARGET_MODULE) || true >/dev/null
 
 client: client.c
+	$(CC) -o $@ $^
+
+measure: measure.c
 	$(CC) -o $@ $^
 
 PRINTF = env printf
@@ -39,3 +42,9 @@ check: all
 	$(MAKE) unload
 	@diff -u out scripts/expected.txt && $(call pass)
 	@scripts/verify.py
+
+output:
+	$(MAKE) unload
+	$(MAKE) load
+	sudo ./measure > time_output/measure_time.txt
+	$(MAKE) unload
