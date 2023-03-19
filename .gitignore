@@ -29,6 +29,7 @@ dkms.conf
 # test-oriented
 client
 out
+measure
 
 # output information
 *.png
