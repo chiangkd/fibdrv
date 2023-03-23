@@ -20,6 +20,10 @@ MODULE_VERSION("0.1");
  */
 #define MAX_LENGTH 92
 
+#ifndef FIBMODE
+#define FIBMODE 1
+#endif
+
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
 static struct class *fib_class;
@@ -28,6 +32,9 @@ static DEFINE_MUTEX(fib_mutex);
 // static DEFINE_KTIME(fib_kt);
 
 static ktime_t fib_kt;
+
+long long (*fib_method)(
+    long long);  // function pointer point to the selected method
 
 static long long fib_sequence_fd_iter(long long k)
 {
@@ -104,6 +111,25 @@ static int fib_release(struct inode *inode, struct file *file)
     return 0;
 }
 
+
+void mode_select(void)
+{
+    switch (FIBMODE) {
+    case 1:
+        fib_method = &fib_sequence;
+        break;
+    case 2:
+        fib_method = &fib_sequence_fd_iter;
+        break;
+    case 3:
+        fib_method = &fib_sequence_fd_recur;
+        break;
+
+    default:
+        break;
+    }
+}
+
 /* calculate the fibonacci number at given offset */
 static ssize_t fib_read(struct file *file,
                         char *buf,
@@ -111,11 +137,10 @@ static ssize_t fib_read(struct file *file,
                         loff_t *offset)
 {
     // return (ssize_t) fib_sequence(*offset);
+    mode_select();
     fib_kt = ktime_get();
     /* multiple method under test */
-    // ssize_t ret = fib_sequence_fd_recur(*offset);
-    // ssize_t ret = fib_sequence_fd_iter(*offset);
-    ssize_t ret = fib_sequence(*offset);
+    ssize_t ret = fib_method(*offset);
     fib_kt = ktime_sub(ktime_get(), fib_kt);
     return ret;
 }
