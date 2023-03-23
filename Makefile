@@ -2,7 +2,9 @@ CONFIG_MODULE_SIG = n
 TARGET_MODULE := fibdrv
 
 obj-m := $(TARGET_MODULE).o
-ccflags-y := -std=gnu99 -Wno-declaration-after-statement
+$(TARGET_MODULE)-objs := src/fibdrv.o 
+
+ccflags-y := -std=gnu99 -Wno-declaration-after-statement -D MODE=$(MODE)
 
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
@@ -18,16 +20,16 @@ $(GIT_HOOKS):
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	$(RM) client out measure
+	$(RM) client out measure time_output/*.txt
 load:
 	sudo insmod $(TARGET_MODULE).ko
 unload:
 	sudo rmmod $(TARGET_MODULE) || true >/dev/null
 
-client: client.c
+client: src/client.c
 	$(CC) -o $@ $^
 
-measure: measure.c
+measure: src/measure.c
 	$(CC) -o $@ $^
 
 PRINTF = env printf
@@ -46,5 +48,5 @@ check: all
 output:
 	$(MAKE) unload
 	$(MAKE) load
-	sudo taskset -c 0 ./measure > time_output/measure_time.txt
+	sudo taskset -c 0 ./measure > time_output/$(FILENAME).txt
 	$(MAKE) unload
