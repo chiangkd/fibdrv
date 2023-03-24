@@ -4,7 +4,11 @@ TARGET_MODULE := fibdrv
 obj-m := $(TARGET_MODULE).o
 $(TARGET_MODULE)-objs := src/fibdrv.o 
 
-ccflags-y := -std=gnu99 -Wno-declaration-after-statement -D MODE=$(MODE)
+ccflags-y := -std=gnu99 -Wno-declaration-after-statement 
+
+ifneq ($(FIBMODE),)
+ccflags-y += -D FIBMODE=$(strip $(FIBMODE))
+endif
 
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
