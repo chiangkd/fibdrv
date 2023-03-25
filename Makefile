@@ -2,7 +2,7 @@ CONFIG_MODULE_SIG = n
 TARGET_MODULE := fibdrv
 
 obj-m := $(TARGET_MODULE).o
-$(TARGET_MODULE)-objs := src/fibdrv.o 
+$(TARGET_MODULE)-objs := src/fibdrv.o src/bignum.o
 
 ccflags-y := -std=gnu99 -Wno-declaration-after-statement 
 

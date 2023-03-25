@@ -8,6 +8,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 
+#include "../inc/bignum.h"
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_AUTHOR("National Cheng Kung University, Taiwan");
 MODULE_DESCRIPTION("Fibonacci engine driver");
@@ -18,7 +19,7 @@ MODULE_VERSION("0.1");
 /* MAX_LENGTH is set to 92 because
  * ssize_t can't fit the number > 92
  */
-#define MAX_LENGTH 92
+#define MAX_LENGTH 500
 
 #ifndef FIBMODE
 #define FIBMODE 1
@@ -33,8 +34,9 @@ static DEFINE_MUTEX(fib_mutex);
 
 static ktime_t fib_kt;
 
-long long (*fib_method)(
-    long long);  // function pointer point to the selected method
+void (*fib_method)(
+    bn *,
+    unsigned int);  // function pointer point to the selected method
 
 static long long fib_sequence_fd_iter(long long k)
 {
@@ -116,15 +118,11 @@ void mode_select(void)
 {
     switch (FIBMODE) {
     case 1:
-        fib_method = &fib_sequence;
+        fib_method = &bn_fib;
         break;
     case 2:
-        fib_method = &fib_sequence_fd_iter;
+        fib_method = &bn_fib_fdoubling;
         break;
-    case 3:
-        fib_method = &fib_sequence_fd_recur;
-        break;
-
     default:
         break;
     }
@@ -136,13 +134,20 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
+    bn *fib = bn_alloc(1);
     // return (ssize_t) fib_sequence(*offset);
     mode_select();
     fib_kt = ktime_get();
     /* multiple method under test */
-    ssize_t ret = fib_method(*offset);
+    fib_method(fib, *offset);
     fib_kt = ktime_sub(ktime_get(), fib_kt);
-    return ret;
+    char *p = bn_to_string(fib);
+    size_t len = strlen(p) + 1;
+    size_t left = copy_to_user(buf, p, len);
+    // printk(KERN_DEBUG "fib(%d): %s\n", (int) *offset, p);
+    bn_free(fib);
+    kfree(p);
+    return left;
 }
 
 /* write operation is skipped */
@@ -151,8 +156,8 @@ static ssize_t fib_write(struct file *file,
                          size_t size,
                          loff_t *offset)
 {
-    // return 1;
-    return ktime_to_ns(fib_kt);
+    return 1;
+    // return ktime_to_ns(fib_kt);
 }
 
 static loff_t fib_device_lseek(struct file *file, loff_t offset, int orig)
