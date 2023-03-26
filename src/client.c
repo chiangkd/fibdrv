@@ -1,4 +1,3 @@
-
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,9 +9,10 @@
 
 int main()
 {
+    long long sz;
+
     char buf[256];
-    // char write_buf[] = "testing writing";
-    int offset = 500;
+    int offset = 1000; /* TODO: try test something bigger than the limit */
 
     int fd = open(FIB_DEV, O_RDWR);
     if (fd < 0) {
@@ -22,10 +22,22 @@ int main()
 
     for (int i = 0; i <= offset; i++) {
         lseek(fd, i, SEEK_SET);
-        long long sz = read(fd, buf, 100);
-        if (sz)
-            printf("returned message was truncated!\n");
-        printf("fib(%d): %s\n", i, buf);
+        // cppcheck-suppress unreadVariable
+        sz = read(fd, buf, 1);
+        printf("Reading from " FIB_DEV
+               " at offset %d, returned the sequence "
+               "%s.\n",
+               i, buf);
+    }
+
+    for (int i = offset; i >= 0; i--) {
+        lseek(fd, i, SEEK_SET);
+        // cppcheck-suppress unreadVariable
+        sz = read(fd, buf, 1);
+        printf("Reading from " FIB_DEV
+               " at offset %d, returned the sequence "
+               "%s.\n",
+               i, buf);
     }
 
     close(fd);

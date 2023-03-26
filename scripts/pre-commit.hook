@@ -11,7 +11,7 @@ CPPCHECK_suppresses=" \
 --suppress=unusedFunction:src/fibdrv.c \
 --suppress=unusedFunction:src/bignum.c
 "
-CPPCHECK_OPTS="-I. --enable=all --error-exitcode=1 --force $CPPCHECK_suppresses $CPPCHECK_unmatched ."
+CPPCHECK_OPTS="-I. --enable=all --inline-suppr --error-exitcode=1 --force $CPPCHECK_suppresses $CPPCHECK_unmatched ."
 
 RETURN=0
 CLANG_FORMAT=$(which clang-format)
