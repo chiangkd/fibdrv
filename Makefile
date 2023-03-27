@@ -52,5 +52,5 @@ check: all
 output:
 	$(MAKE) unload
 	$(MAKE) load
-	sudo taskset -c 0 ./measure > time_output/$(FILENAME).txt
+	sudo taskset -c 0 ./measure > time_measure/$(FILENAME).txt
 	$(MAKE) unload
