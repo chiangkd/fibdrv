@@ -35,3 +35,7 @@ measure
 # output information
 *.png
 *.txt
+
+# perf file
+*.data
+*.old
