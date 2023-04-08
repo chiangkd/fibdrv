@@ -38,66 +38,6 @@ void (*fib_method)(
     bn *,
     unsigned int);  // function pointer point to the selected method
 
-static long long fib_sequence_fd_iter(long long k)
-{
-    // Fibonacci sequence: 0, 1, 1, 2, 3, 5, 8, 13, ...
-    if (k <= 2)
-        return !!k;
-
-    long long fk0 = 1;  // F(k), F(2k)
-    long long fk1 = 1;  // F(k+1), F(2k+1)
-
-    uint8_t count = 63 - __builtin_clzll(k);
-
-    for (uint64_t i = count, f2k0, f2k1; i-- > 0;) {
-        /*  F(2k) = F(k)[2F(k+1) - F(k)]
-         *  F(2k+1) = F(k+1)^2 + F(k)^2
-         */
-        f2k0 = fk0 * ((fk1 << 1) - fk0);
-        f2k1 = fk1 * fk1 + fk0 * fk0;
-
-        if (k & (1UL << i)) {
-            fk0 = f2k1;
-            fk1 = f2k0 + f2k1;
-        } else {
-            fk0 = f2k0;
-            fk1 = f2k1;
-        }
-    }
-    return fk0;
-}
-
-static long long fib_sequence_fd_recur(long long k)
-{
-    if (k <= 2)
-        return !!k;
-    /*  F(2k) = F(k)[2F(k+1) - F(k)]    - (1)
-     *  F(2k+1) = F(k+1)^2 + F(k)^2     - (2)
-     */
-    long long n = fib_sequence_fd_recur(k >> 1);
-    long long n1 = fib_sequence_fd_recur((k >> 1) + 1);
-
-    // return 2n or 2n+1
-    if (k & 1)
-        return n * n + n1 * n1;  // - (2)
-    return n * ((n1 << 1) - n);  // - (1)
-}
-
-static long long fib_sequence(long long k)
-{
-    /* FIXME: C99 variable-length array (VLA) is not allowed in Linux kernel. */
-    long long f[k + 2];
-
-    f[0] = 0;
-    f[1] = 1;
-
-    for (int i = 2; i <= k; i++) {
-        f[i] = f[i - 1] + f[i - 2];
-    }
-
-    return f[k];
-}
-
 static int fib_open(struct inode *inode, struct file *file)
 {
     if (!mutex_trylock(&fib_mutex)) {

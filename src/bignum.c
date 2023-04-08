@@ -167,6 +167,7 @@ void bn_lshift(bn *src, size_t shift)
 }
 
 /* right bit shift on bn (maximun shift 31) */
+// cppcheck-suppress unusedFunction
 void bn_rshift(bn *src, size_t shift)
 {
     size_t z = 32 - bn_clz(src);

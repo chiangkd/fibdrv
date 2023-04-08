@@ -8,8 +8,8 @@ done
 CPPCHECK_suppresses=" \
 --suppress=missingIncludeSystem \
 --suppress=noValidConfiguration:fibdrv.c \
---suppress=unusedFunction:src/fibdrv.c \
---suppress=unusedFunction:src/bignum.c
+--suppress=unusedFunction:fibdrv.c \
+--suppress=unusedFunction:bignum.c
 "
 CPPCHECK_OPTS="-I. --enable=all --inline-suppr --error-exitcode=1 --force $CPPCHECK_suppresses $CPPCHECK_unmatched ."
 
