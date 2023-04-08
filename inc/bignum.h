@@ -1,3 +1,5 @@
+#ifndef BIG_N_
+#define BIG_N_
 /*
  * bignum data structure
  * number[0] contains least significant bits
@@ -63,3 +65,5 @@ void bn_mult(const bn *a, const bn *b, bn *c);
 /* calc n-th Fibonacci number and save into dest */
 void bn_fib_fdoubling(bn *dest, unsigned int n);
 void bn_fib(bn *dest, unsigned int n);
+
+#endif /* BIG_N_ */

@@ -7,6 +7,7 @@
 #include <linux/ktime.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/slab.h>
 
 #include "../inc/bignum.h"
 MODULE_LICENSE("Dual MIT/GPL");
