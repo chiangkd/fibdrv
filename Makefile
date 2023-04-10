@@ -24,7 +24,7 @@ $(GIT_HOOKS):
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	$(RM) client out measure time_output/*.txt
+	$(RM) client out measure mult time_output/*.txt
 load:
 	sudo insmod $(TARGET_MODULE).ko
 unload:
@@ -40,6 +40,9 @@ PRINTF = env printf
 PASS_COLOR = \e[32;01m
 NO_COLOR = \e[0m
 pass = $(PRINTF) "$(PASS_COLOR)$1 Passed [-]$(NO_COLOR)\n"
+
+mult: src/multithread.c
+	$(CC) -pthread -o $@ $^
 
 check: all
 	$(MAKE) unload
