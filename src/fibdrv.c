@@ -5,9 +5,12 @@
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
 #include <linux/ktime.h>
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+
+
 
 #include "../inc/bignum.h"
 MODULE_LICENSE("Dual MIT/GPL");
@@ -26,12 +29,18 @@ MODULE_VERSION("0.1");
 #define FIBMODE 1
 #endif
 
+typedef struct _hdata_node {
+    bn *data;
+    struct hlist_node list;
+} hdata_node;
+
 static dev_t fib_dev = 0;
 static struct cdev *fib_cdev;
 static struct class *fib_class;
 static DEFINE_MUTEX(fib_mutex);
+static struct hlist_head htable[MAX_LENGTH + 1];  // hash table (share memory)
+static hdata_node *dnode = NULL;                  // data node
 
-// static DEFINE_KTIME(fib_kt);
 
 static ktime_t fib_kt;
 
@@ -41,6 +50,9 @@ void (*fib_method)(
 
 static int fib_open(struct inode *inode, struct file *file)
 {
+    for (int i = 0; i <= MAX_LENGTH; i++) {
+        INIT_HLIST_HEAD(&htable[i]);
+    }
     if (!mutex_trylock(&fib_mutex)) {
         printk(KERN_ALERT "fibdrv is in use");
         return -EBUSY;
@@ -69,25 +81,60 @@ void mode_select(void)
     }
 }
 
+static int is_in_ht(loff_t *offset)
+{
+    int key = (int) *(offset);
+    if (hlist_empty(&htable[key])) {
+        printk(KERN_DEBUG "No find in hash table\n");
+        return 0; /* no in hash table */
+    }
+    return 1;
+}
+
 /* calculate the fibonacci number at given offset */
 static ssize_t fib_read(struct file *file,
                         char *buf,
                         size_t size,
                         loff_t *offset)
 {
-    bn *fib = bn_alloc(1);
-    // return (ssize_t) fib_sequence(*offset);
-    mode_select();
-    fib_kt = ktime_get();
-    /* multiple method under test */
-    fib_method(fib, *offset);
-    fib_kt = ktime_sub(ktime_get(), fib_kt);
-    char *p = bn_to_string(fib);
-    size_t len = strlen(p) + 1;
-    size_t left = copy_to_user(buf, p, len);
-    // printk(KERN_DEBUG "fib(%d): %s\n", (int) *offset, p);
+    char *p = NULL;
+    size_t len = 0, left = 0;
+    bn *fib = NULL;
+    int key = (int) *offset;
+    if (is_in_ht(offset)) {
+        printk(KERN_DEBUG "find offset = %d\n", key);
+        fib = hlist_entry(htable[key].first, hdata_node, list)->data;
+    } else {
+        fib = bn_alloc(1);
+        dnode = kcalloc(1, sizeof(hdata_node), GFP_KERNEL);
+        if (dnode == NULL)
+            printk("kcalloc failed \n");
+        dnode->data = bn_alloc(1);
+        mode_select();
+        fib_method(fib, *offset);
+        INIT_HLIST_NODE(&dnode->list);
+        bn_cpy(dnode->data, fib);
+        hlist_add_head(&dnode->list, &htable[key]);  // add to hash table
+    }
+    p = bn_to_string(fib);
+    len = strlen(p) + 1;
+    left = copy_to_user(buf, p, len);
+
+    /* original code */
+    // bn *fib = bn_alloc(1);
+    // // return (ssize_t) fib_sequence(*offset);
+    // mode_select();
+    // fib_kt = ktime_get();
+    // /* multiple method under test */
+    // fib_method(fib, *offset);
+    // fib_kt = ktime_sub(ktime_get(), fib_kt);
+    // char *p = bn_to_string(fib);
+    // size_t len = strlen(p) + 1;
+    // size_t left = copy_to_user(buf, p, len);
+    // // printk(KERN_DEBUG "fib(%d): %s\n", (int) *offset, p);
     bn_free(fib);
     kfree(p);
+
     return left;
 }
 
