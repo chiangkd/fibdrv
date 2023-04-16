@@ -8,8 +8,8 @@
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
-
 
 
 #include "../inc/bignum.h"
@@ -50,19 +50,17 @@ void (*fib_method)(
 
 static int fib_open(struct inode *inode, struct file *file)
 {
-    for (int i = 0; i <= MAX_LENGTH; i++) {
-        INIT_HLIST_HEAD(&htable[i]);
-    }
-    if (!mutex_trylock(&fib_mutex)) {
-        printk(KERN_ALERT "fibdrv is in use");
-        return -EBUSY;
-    }
+    // if (!mutex_trylock(&fib_mutex)) {
+    //     printk(KERN_ALERT "fibdrv is in use");
+    //     return -EBUSY;
+    // }
+    // mutex_lock(&fib_mutex);
     return 0;
 }
 
 static int fib_release(struct inode *inode, struct file *file)
 {
-    mutex_unlock(&fib_mutex);
+    // mutex_unlock(&fib_mutex);
     return 0;
 }
 
@@ -85,7 +83,8 @@ static int is_in_ht(loff_t *offset)
 {
     int key = (int) *(offset);
     if (hlist_empty(&htable[key])) {
-        printk(KERN_DEBUG "No find in hash table\n");
+        printk(KERN_INFO "No find offset = %d in thread %d\n", key,
+               current->pid);
         return 0; /* no in hash table */
     }
     return 1;
@@ -101,8 +100,11 @@ static ssize_t fib_read(struct file *file,
     size_t len = 0, left = 0;
     bn *fib = NULL;
     int key = (int) *offset;
+
+    /* critical section */
+    mutex_lock(&fib_mutex);
     if (is_in_ht(offset)) {
-        printk(KERN_DEBUG "find offset = %d\n", key);
+        printk(KERN_INFO "find offset = %d in thread %d\n", key, current->pid);
         fib = hlist_entry(htable[key].first, hdata_node, list)->data;
     } else {
         fib = bn_alloc(1);
@@ -116,25 +118,14 @@ static ssize_t fib_read(struct file *file,
         bn_cpy(dnode->data, fib);
         hlist_add_head(&dnode->list, &htable[key]);  // add to hash table
     }
+    mutex_unlock(&fib_mutex);
+
     p = bn_to_string(fib);
     len = strlen(p) + 1;
     left = copy_to_user(buf, p, len);
 
-    /* original code */
-    // bn *fib = bn_alloc(1);
-    // // return (ssize_t) fib_sequence(*offset);
-    // mode_select();
-    // fib_kt = ktime_get();
-    // /* multiple method under test */
-    // fib_method(fib, *offset);
-    // fib_kt = ktime_sub(ktime_get(), fib_kt);
-    // char *p = bn_to_string(fib);
-    // size_t len = strlen(p) + 1;
-    // size_t left = copy_to_user(buf, p, len);
-    // // printk(KERN_DEBUG "fib(%d): %s\n", (int) *offset, p);
     bn_free(fib);
     kfree(p);
-
     return left;
 }
 
@@ -185,6 +176,10 @@ static int __init init_fib_dev(void)
     int rc = 0;
 
     mutex_init(&fib_mutex);
+
+    for (int i = 0; i <= MAX_LENGTH; i++) {
+        INIT_HLIST_HEAD(&htable[i]);
+    }
 
     // Let's register the device
     // This will dynamically allocate the major number
