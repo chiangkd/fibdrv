@@ -10,20 +10,23 @@
 
 
 #define FIB_DEV "/dev/fibonacci"
-#define NTHREAD 2
+#define NTHREAD 10
 
-void *(thread_handler) (void *x)
+pthread_mutex_t plock;
+
+void *thread_handler(void *x)
 {
-    pthread_t tid = pthread_self();
     // cppcheck-suppress variableScope
     long long sz;
 
+    int ktid = syscall(__NR_gettid);
+
     char buf[256];
-    int offset = 10; /* TODO: try test something bigger than the limit */
+    int offset = 1000; /* TODO: try test something bigger than the limit */
 
     int fd = open(FIB_DEV, O_RDWR);
     if (fd < 0) {
-        printf("thread ID - %ld Failed to open character device\n", tid);
+        printf("thread ID - %d Failed to open character device\n", ktid);
         // perror("Failed to open character device");
         exit(1);
     }
@@ -32,10 +35,10 @@ void *(thread_handler) (void *x)
         lseek(fd, i, SEEK_SET);
         // cppcheck-suppress unreadVariable
         sz = read(fd, buf, 1);
-        printf("TID = %ld, Reading from " FIB_DEV
+        printf("TID = %d, Reading from " FIB_DEV
                " at offset %d, returned the sequence "
                "%s.\n",
-               tid, i, buf);
+               ktid, i, buf);
     }
     close(fd);
 }

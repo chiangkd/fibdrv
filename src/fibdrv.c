@@ -44,7 +44,7 @@ static hdata_node *dnode = NULL;                  // data node
 
 static ktime_t fib_kt;
 
-void (*fib_method)(
+static void (*fib_method)(
     bn *,
     unsigned int);  // function pointer point to the selected method
 
@@ -65,7 +65,7 @@ static int fib_release(struct inode *inode, struct file *file)
 }
 
 
-void mode_select(void)
+static void mode_select(void)
 {
     switch (FIBMODE) {
     case 1:
@@ -88,6 +88,20 @@ static int is_in_ht(loff_t *offset)
         return 0; /* no in hash table */
     }
     return 1;
+}
+
+static void release_memory(void)
+{
+    struct hlist_node *n = NULL;
+    /* go through and free hashtable */
+    for (int i = 0; i < MAX_LENGTH; i++) {
+        hlist_for_each_entry_safe(dnode, n, &htable[i], list)
+        {
+            bn_free(dnode->data);
+            hlist_del(&dnode->list);
+            kfree(dnode);
+        }
+    }
 }
 
 /* calculate the fibonacci number at given offset */
@@ -230,6 +244,7 @@ failed_cdev:
 
 static void __exit exit_fib_dev(void)
 {
+    release_memory();
     mutex_destroy(&fib_mutex);
     device_destroy(fib_class, fib_dev);
     class_destroy(fib_class);
