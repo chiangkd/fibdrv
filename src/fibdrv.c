@@ -111,11 +111,10 @@ static ssize_t fib_read(struct file *file,
         dnode = kcalloc(1, sizeof(hdata_node), GFP_KERNEL);
         if (dnode == NULL)
             printk("kcalloc failed \n");
-        dnode->data = bn_alloc(1);
         mode_select();
         fib_method(fib, *offset);
+        dnode->data = fib;
         INIT_HLIST_NODE(&dnode->list);
-        bn_cpy(dnode->data, fib);
         hlist_add_head(&dnode->list, &htable[key]);  // add to hash table
     }
     mutex_unlock(&fib_mutex);
@@ -124,7 +123,6 @@ static ssize_t fib_read(struct file *file,
     len = strlen(p) + 1;
     left = copy_to_user(buf, p, len);
 
-    bn_free(fib);
     kfree(p);
     return left;
 }
