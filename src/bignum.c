@@ -166,6 +166,27 @@ void bn_lshift(bn *src, size_t shift)
     src->number[0] <<= shift;
 }
 
+/* left bit shift on bn (maximun shift 31) */
+void bn_lshift_2(const bn *src, size_t shift, bn *dest)
+{
+    size_t z = bn_clz(src);
+    shift %= 32;  // only handle shift within 32 bits atm
+    if (!shift)
+        return;
+
+    if (shift > z) {
+        bn_resize(dest, src->size + 1);
+        dest->number[src->size] = src->number[src->size - 1] >> (32 - shift);
+    } else {
+        bn_resize(dest, src->size);
+    }
+    /* bit shift */
+    for (int i = src->size - 1; i > 0; i--)
+        dest->number[i] =
+            src->number[i] << shift | src->number[i - 1] >> (32 - shift);
+    dest->number[0] = src->number[0] << shift;
+}
+
 /* right bit shift on bn (maximun shift 31) */
 // cppcheck-suppress unusedFunction
 void bn_rshift(bn *src, size_t shift)
@@ -333,6 +354,8 @@ void bn_mult(const bn *a, const bn *b, bn *c)
         c = bn_alloc(d);
     } else {
         tmp = NULL;
+        for (int i = 0; i < c->size; i++)
+            c->number[i] = 0;
         bn_resize(c, d);
     }
 
@@ -346,7 +369,7 @@ void bn_mult(const bn *a, const bn *b, bn *c)
     c->sign = a->sign ^ b->sign;
 
     if (tmp) {
-        bn_cpy(tmp, c);  // restore c
+        bn_swap(tmp, c);  // restore c
         bn_free(c);
     }
 }
@@ -393,24 +416,63 @@ void bn_fib_fdoubling(bn *dest, unsigned int n)
     bn *k2 = bn_alloc(1);
 
     /* walk through the digit of n */
-    for (unsigned int i = 1U << 31; i; i >>= 1) {
+    for (unsigned int i = 1U << (31 - __builtin_clz(n)); i; i >>= 1) {
         /* F(2k) = F(k) * [ 2 * F(k+1) – F(k) ] */
         bn_cpy(k1, f2);
-        bn_lshift(k1, 1);
-        bn_sub(k1, f1, k1);
-        bn_mult(k1, f1, k1);
+        bn_lshift(k1, 1);     // k1 = 2 * F(k+1)
+        bn_sub(k1, f1, k1);   // k1 = 2 * F(k+1) - F(k)
+        bn_mult(k1, f1, k1);  // k1 = F(k) * (2F(k+1) - F(k))
         /* F(2k+1) = F(k)^2 + F(k+1)^2 */
-        bn_mult(f1, f1, f1);
-        bn_mult(f2, f2, f2);
-        bn_cpy(k2, f1);
-        bn_add(k2, f2, k2);
+        bn_mult(f1, f1, f1);  // f1 = F(k)^2
+        bn_mult(f2, f2, f2);  // f2 = F(k+1)^2
+        bn_cpy(k2, f1);       // k2 = f1 = F(k)^2
+        bn_add(k2, f2, k2);   // k2 = F(k+1)^2 + F(k)^2
         if (n & i) {
-            bn_cpy(f1, k2);
-            bn_cpy(f2, k1);
+            bn_cpy(f1, k2);  // f1 = F(k+1)^2 + F(k)^2
+            bn_cpy(f2, k1);  // f2 = F(k) * (2F(k+1) - F(k))
             bn_add(f2, k2, f2);
         } else {
-            bn_cpy(f1, k1);
-            bn_cpy(f2, k2);
+            bn_cpy(f1, k1);  // f1 = F(k) * (2F(k+1) - F(k))
+            bn_cpy(f2, k2);  // f2 = F(k+1)^2 + F(k)^2
+        }
+    }
+    // return f[0]
+    bn_free(f2);
+    bn_free(k1);
+    bn_free(k2);
+}
+
+void bn_fib_fdoubling_v1(bn *dest, unsigned int n)
+{
+    bn_resize(dest, 1);
+    if (n < 2) {  // Fib(0) = 0, Fib(1) = 1
+        dest->number[0] = n;
+        return;
+    }
+
+    bn *f1 = dest;        /* F(k) */
+    bn *f2 = bn_alloc(1); /* F(k+1) */
+    f1->number[0] = 0;
+    f2->number[0] = 1;
+    bn *k1 = bn_alloc(1);
+    bn *k2 = bn_alloc(1);
+
+    /* walk through the digit of n */
+    for (unsigned int i = 1U << (31 - __builtin_clz(n)); i; i >>= 1) {
+        /* F(2k) = F(k) * [ 2 * F(k+1) – F(k) ] */
+        /* F(2k+1) = F(k)^2 + F(k+1)^2 */
+        bn_lshift_2(f2, 1, k1);  // k1 = 2 * F(k+1)
+        bn_sub(k1, f1, k1);      // k1 = 2 * F(k+1) – F(k)
+        bn_mult(k1, f1,
+                k2);  // k2 = k1 * f1 = = F(k)*(2 * F(k+1) - F(k)) = F(2k)
+        bn_mult(f1, f1, k1);  // k1 = F(k)^2
+        bn_swap(f1, k2);      // f1 <-> k2, f1 = F(2k) now
+        bn_mult(f2, f2, k2);  // k2 = F(k+1)^2
+        bn_add(k1, k2,
+               f2);  // f2 = F(k)^2 + F(k+1)^2 = f1^2 + f2^2 = F(2k+1) now
+        if (n & i) {
+            bn_swap(f1, f2);     // f1 = F(2k+1)
+            bn_add(f1, f2, f2);  // f2 = F(2k+2)
         }
     }
     // return f[0]

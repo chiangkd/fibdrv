@@ -74,6 +74,9 @@ static void mode_select(void)
     case 2:
         fib_method = &bn_fib_fdoubling;
         break;
+    case 3:
+        fib_method = &bn_fib_fdoubling_v1;
+        break;
     default:
         break;
     }
