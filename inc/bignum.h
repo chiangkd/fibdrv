@@ -67,5 +67,5 @@ void bn_mult(const bn *a, const bn *b, bn *c);
 void bn_fib_fdoubling(bn *dest, unsigned int n);
 void bn_fib(bn *dest, unsigned int n);
 void bn_fib_fdoubling_v1(bn *dest, unsigned int n);
-
+void bn_fib_fdoubling_v2(bn *dest, unsigned int n);
 #endif /* BIG_N_ */

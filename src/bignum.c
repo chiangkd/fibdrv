@@ -462,7 +462,7 @@ void bn_fib_fdoubling_v1(bn *dest, unsigned int n)
         /* F(2k) = F(k) * [ 2 * F(k+1) – F(k) ] */
         /* F(2k+1) = F(k)^2 + F(k+1)^2 */
         bn_lshift_2(f2, 1, k1);  // k1 = 2 * F(k+1)
-        bn_sub(k1, f1, k1);      // k1 = 2 * F(k+1) – F(k)
+        bn_sub(k1, f1, k1);      // k1 = 2 * F(k+1) - F(k)
         bn_mult(k1, f1,
                 k2);  // k2 = k1 * f1 = = F(k)*(2 * F(k+1) - F(k)) = F(2k)
         bn_mult(f1, f1, k1);  // k1 = F(k)^2
@@ -477,6 +477,41 @@ void bn_fib_fdoubling_v1(bn *dest, unsigned int n)
     }
     // return f[0]
     bn_free(f2);
+    bn_free(k1);
+    bn_free(k2);
+}
+
+void bn_fib_fdoubling_v2(bn *dest, unsigned int n)
+{
+    bn_resize(dest, 1);
+    if (n < 2) {  // Fib(0) = 0, Fib(1) = 1
+        dest->number[0] = n;
+        return;
+    }
+
+    bn *f1 = bn_alloc(1);  // f1 = F(k-1)
+    bn *f2 = dest;         // f2 = F(k) = dest
+    f1->number[0] = 0;
+    f2->number[0] = 1;
+    bn *k1 = bn_alloc(1);
+    bn *k2 = bn_alloc(1);
+
+    for (unsigned int i = 1U << (30 - __builtin_clz(n)); i; i >>= 1) {
+        /* F(2k-1) = F(k)^2 + F(k-1)^2 */
+        /* F(2k) = F(k) * [ 2 * F(k-1) + F(k) ] */
+        bn_lshift_2(f1, 1, k1);  // k1 = 2 * F(k-1)
+        bn_add(k1, f2, k1);      // k1 = 2 * F(k-1) + F(k)
+        bn_mult(k1, f2, k2);     // k2 = k1 * f2 = F(2k)
+        bn_mult(f2, f2, k1);     // k1 = F(k)^2
+        bn_swap(f2, k2);         // f2 <-> k2, f2 = F(2k) now
+        bn_mult(f1, f1, k2);     // k2 = F(k-1)^2
+        bn_add(k2, k1, f1);      // f1 = k1 + k2 = F(2k-1) now
+        if (n & i) {
+            bn_swap(f1, f2);     // f1 = F(2k+1)
+            bn_add(f1, f2, f2);  // f2 = F(2k+2)
+        }
+    }
+    bn_free(f1);
     bn_free(k1);
     bn_free(k2);
 }
