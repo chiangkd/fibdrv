@@ -9,6 +9,7 @@
 typedef struct _bn {
     unsigned int *number;
     unsigned int size;
+    unsigned int capacity; /* total allocated length, size <= capacity */
     int sign;
 } bn;
 
