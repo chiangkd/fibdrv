@@ -1,5 +1,25 @@
 #ifndef BIG_N_
 #define BIG_N_
+
+#if defined(__LP64__) || defined(__x86_64__) || defined(__amd64__) || \
+    defined(__aarch64__)
+#define BN_WSIZE 8
+#else
+#define BN_WSIZE 4
+#endif
+
+#if BN_WSIZE == 8
+#define DIGITS 64
+typedef uint64_t bn_data;
+typedef unsigned __int128 bn_data_tmp;  // gcc support __int128
+#elif BN_WSIZE == 4
+#define DIGITS 32
+typedef uint32_t bn_data;
+typedef uint64_t bn_data_tmp;
+#else
+#error "BN_WSIZE must be 4 or 8"
+#endif
+
 /*
  * bignum data structure
  * number[0] contains least significant bits
@@ -7,9 +27,9 @@
  * sign = 1 for negative number
  */
 typedef struct _bn {
-    unsigned int *number;
-    unsigned int size;
-    unsigned int capacity; /* total allocated length, size <= capacity */
+    bn_data *number;
+    bn_data size;
+    bn_data capacity; /* total allocated length, size <= capacity */
     int sign;
 } bn;
 

@@ -28,10 +28,10 @@ static int bn_clz(const bn *src)
     for (int i = src->size - 1; i >= 0; i--) {
         if (src->number[i]) {
             // prevent undefined behavior when src = 0
-            cnt += __builtin_clz(src->number[i]);
+            cnt += __builtin_clzll(src->number[i]);
             return cnt;
         } else {
-            cnt += 32;
+            cnt += DIGITS;
         }
     }
     return cnt;
@@ -40,7 +40,7 @@ static int bn_clz(const bn *src)
 /* count the digits of most significant bit */
 static int bn_msb(const bn *src)
 {
-    return src->size * 32 - bn_clz(src);
+    return src->size * DIGITS - bn_clz(src);
 }
 
 /*
@@ -50,7 +50,7 @@ static int bn_msb(const bn *src)
 char *bn_to_string(const bn *src)
 {
     // log10(x) = log2(x) / log2(10) ~= log2(x) / 3.322
-    size_t len = (8 * sizeof(int) * src->size) / 3 + 2 + src->sign;
+    size_t len = (8 * sizeof(bn_data) * src->size) / 3 + 2 + src->sign;
     char *s = kmalloc(len, GFP_KERNEL);
     char *p = s;
 
@@ -60,7 +60,7 @@ char *bn_to_string(const bn *src)
     /* src.number[0] contains least significant bits */
     for (int i = src->size - 1; i >= 0; i--) {
         /* walk through every bit of bn */
-        for (unsigned int d = 1U << 31; d; d >>= 1) {
+        for (bn_data d = 1ULL << (DIGITS - 1); d; d >>= 1) {
             /* binary -> decimal string */
             int carry = !!(d & src->number[i]);
             for (int j = len - 2; j >= 0; j--) {
@@ -90,7 +90,7 @@ bn *bn_alloc(size_t size)
     bn *new = (bn *) kmalloc(sizeof(bn), GFP_KERNEL);
     new->size = size;
     new->capacity = size > INIT_ALLOC_SIZE ? size : INIT_ALLOC_SIZE;
-    new->number = kmalloc(sizeof(int) * new->capacity, GFP_KERNEL);
+    new->number = kmalloc(sizeof(bn_data) * new->capacity, GFP_KERNEL);
     for (int i = 0; i < size; i++)
         new->number[i] = 0;
     new->sign = 0;
@@ -127,7 +127,7 @@ static int bn_resize(bn *src, size_t size)
         src->capacity = (size + (ALLOC_CHUNK_SIZE - 1)) &
                         ~(ALLOC_CHUNK_SIZE - 1);  // ceil to 4*n
         src->number =
-            krealloc(src->number, sizeof(int) * src->capacity, GFP_KERNEL);
+            krealloc(src->number, sizeof(bn_data) * src->capacity, GFP_KERNEL);
     }
     if (!src->number) {  // realloc fails
         return -1;
@@ -149,7 +149,7 @@ int bn_cpy(bn *dest, bn *src)
     if (bn_resize(dest, src->size) < 0)
         return -1;
     dest->sign = src->sign;
-    memcpy(dest->number, src->number, src->size * sizeof(int));
+    memcpy(dest->number, src->number, src->size * sizeof(bn_data));
     return 0;
 }
 
@@ -165,7 +165,7 @@ void bn_swap(bn *a, bn *b)
 void bn_lshift(bn *src, size_t shift)
 {
     size_t z = bn_clz(src);
-    shift %= 32;  // only handle shift within 32 bits atm
+    shift %= DIGITS;  // only handle shift within 32 bits atm
     if (!shift)
         return;
 
@@ -174,7 +174,7 @@ void bn_lshift(bn *src, size_t shift)
     /* bit shift */
     for (int i = src->size - 1; i > 0; i--)
         src->number[i] =
-            src->number[i] << shift | src->number[i - 1] >> (32 - shift);
+            src->number[i] << shift | src->number[i - 1] >> (DIGITS - shift);
     src->number[0] <<= shift;
 }
 
@@ -182,20 +182,21 @@ void bn_lshift(bn *src, size_t shift)
 void bn_lshift_2(const bn *src, size_t shift, bn *dest)
 {
     size_t z = bn_clz(src);
-    shift %= 32;  // only handle shift within 32 bits atm
+    shift %= DIGITS;  // only handle shift within 32 bits atm
     if (!shift)
         return;
 
     if (shift > z) {
         bn_resize(dest, src->size + 1);
-        dest->number[src->size] = src->number[src->size - 1] >> (32 - shift);
+        dest->number[src->size] =
+            src->number[src->size - 1] >> (DIGITS - shift);
     } else {
         bn_resize(dest, src->size);
     }
     /* bit shift */
     for (int i = src->size - 1; i > 0; i--)
         dest->number[i] =
-            src->number[i] << shift | src->number[i - 1] >> (32 - shift);
+            src->number[i] << shift | src->number[i - 1] >> (DIGITS - shift);
     dest->number[0] = src->number[0] << shift;
 }
 
@@ -203,15 +204,15 @@ void bn_lshift_2(const bn *src, size_t shift, bn *dest)
 // cppcheck-suppress unusedFunction
 void bn_rshift(bn *src, size_t shift)
 {
-    size_t z = 32 - bn_clz(src);
-    shift %= 32;  // only handle shift within 32 bits atm
+    size_t z = DIGITS - bn_clz(src);
+    shift %= DIGITS;  // only handle shift within 32 bits atm
     if (!shift)
         return;
 
     /* bit shift */
     for (int i = 0; i < (src->size - 1); i++)
         src->number[i] = src->number[i] >> shift | src->number[i + 1]
-                                                       << (32 - shift);
+                                                       << (DIGITS - shift);
     src->number[src->size - 1] >>= shift;
 
     if (shift >= z && src->size > 1)
@@ -246,16 +247,16 @@ static void bn_do_add(const bn *a, const bn *b, bn *c)
 {
     // max digits = max(sizeof(a) + sizeof(b)) + 1
     int d = MAX(bn_msb(a), bn_msb(b)) + 1;
-    d = DIV_ROUNDUP(d, 32) + !d;
+    d = DIV_ROUNDUP(d, DIGITS) + !d;
     bn_resize(c, d);  // round up, min size = 1
 
-    unsigned long long int carry = 0;
+    bn_data_tmp carry = 0;
     for (int i = 0; i < c->size; i++) {
-        unsigned int tmp1 = (i < a->size) ? a->number[i] : 0;
-        unsigned int tmp2 = (i < b->size) ? b->number[i] : 0;
-        carry += (unsigned long long int) tmp1 + tmp2;
+        bn_data tmp1 = (i < a->size) ? a->number[i] : 0;
+        bn_data tmp2 = (i < b->size) ? b->number[i] : 0;
+        carry += (bn_data_tmp) tmp1 + tmp2;
         c->number[i] = carry;
-        carry >>= 32;
+        carry >>= DIGITS;
     }
 
     if (!c->number[c->size - 1] && c->size > 1)
@@ -272,14 +273,14 @@ static void bn_do_sub(const bn *a, const bn *b, bn *c)
     int d = MAX(a->size, b->size);
     bn_resize(c, d);
 
-    long long int carry = 0;
+    __int128 carry = 0;
     for (int i = 0; i < c->size; i++) {
-        unsigned int tmp1 = (i < a->size) ? a->number[i] : 0;
-        unsigned int tmp2 = (i < b->size) ? b->number[i] : 0;
+        bn_data tmp1 = (i < a->size) ? a->number[i] : 0;
+        bn_data tmp2 = (i < b->size) ? b->number[i] : 0;
 
-        carry = (long long int) tmp1 - tmp2 - carry;
+        carry = (bn_data_tmp) tmp1 - tmp2 - carry;
         if (carry < 0) {
-            c->number[i] = carry + (1LL << 32);
+            c->number[i] = carry + (1ULL << (DIGITS - 1));
             carry = 1;
         } else {
             c->number[i] = carry;
@@ -287,7 +288,7 @@ static void bn_do_sub(const bn *a, const bn *b, bn *c)
         }
     }
 
-    d = bn_clz(c) / 32;
+    d = bn_clz(c) / DIGITS;
     if (d == c->size)
         --d;
     bn_resize(c, c->size - d);
@@ -336,14 +337,14 @@ void bn_sub(const bn *a, const bn *b, bn *c)
 }
 
 /* c += x, starting from offset */
-static void bn_mult_add(bn *c, int offset, unsigned long long int x)
+static void bn_mult_add(bn *c, int offset, bn_data_tmp x)
 {
-    unsigned long long int carry = 0;
+    bn_data_tmp carry = 0;
     for (int i = offset; i < c->size; i++) {
-        carry += c->number[i] + (x & 0xFFFFFFFF);
+        carry += c->number[i] + (x & 0xFFFFFFFFFFFFFFFF);
         c->number[i] = carry;
-        carry >>= 32;
-        x >>= 32;
+        carry >>= DIGITS;
+        x >>= DIGITS;
         if (!x && !carry)  // done
             return;
     }
@@ -358,7 +359,7 @@ void bn_mult(const bn *a, const bn *b, bn *c)
 {
     // max digits = sizeof(a) + sizeof(b))
     int d = bn_msb(a) + bn_msb(b);
-    d = DIV_ROUNDUP(d, 32) + !d;  // round up, min size = 1
+    d = DIV_ROUNDUP(d, DIGITS) + !d;  // round up, min size = 1
     bn *tmp;
     /* make it work properly when c == a or c == b */
     if (c == a || c == b) {
@@ -373,8 +374,8 @@ void bn_mult(const bn *a, const bn *b, bn *c)
 
     for (int i = 0; i < a->size; i++) {
         for (int j = 0; j < b->size; j++) {
-            unsigned long long int carry = 0;
-            carry = (unsigned long long int) a->number[i] * b->number[j];
+            bn_data_tmp carry = 0;
+            carry = (bn_data_tmp) a->number[i] * b->number[j];
             bn_mult_add(c, i + j, carry);
         }
     }
@@ -428,7 +429,7 @@ void bn_fib_fdoubling(bn *dest, unsigned int n)
     bn *k2 = bn_alloc(1);
 
     /* walk through the digit of n */
-    for (unsigned int i = 1U << (31 - __builtin_clz(n)); i; i >>= 1) {
+    for (bn_data i = 1U << ((DIGITS - 1) - __builtin_clzll(n)); i; i >>= 1) {
         /* F(2k) = F(k) * [ 2 * F(k+1) – F(k) ] */
         bn_cpy(k1, f2);
         bn_lshift(k1, 1);     // k1 = 2 * F(k+1)
@@ -470,7 +471,7 @@ void bn_fib_fdoubling_v1(bn *dest, unsigned int n)
     bn *k2 = bn_alloc(1);
 
     /* walk through the digit of n */
-    for (unsigned int i = 1U << (31 - __builtin_clz(n)); i; i >>= 1) {
+    for (bn_data i = 1U << ((DIGITS - 1) - __builtin_clzll(n)); i; i >>= 1) {
         /* F(2k) = F(k) * [ 2 * F(k+1) – F(k) ] */
         /* F(2k+1) = F(k)^2 + F(k+1)^2 */
         bn_lshift_2(f2, 1, k1);  // k1 = 2 * F(k+1)
