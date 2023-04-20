@@ -57,3 +57,9 @@ output:
 	$(MAKE) load
 	sudo taskset -c 0 ./measure > time_measure/$(FILENAME).txt
 	$(MAKE) unload
+
+output_mul:
+	$(MAKE) unload
+	$(MAKE) load
+	sudo taskset -c 0 ./mult > time_measure/$(FILENAME).txt
+	$(MAKE) unload

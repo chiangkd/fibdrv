@@ -23,7 +23,7 @@ MODULE_VERSION("0.1");
 /* MAX_LENGTH is set to 92 because
  * ssize_t can't fit the number > 92
  */
-#define MAX_LENGTH 1000
+#define MAX_LENGTH 10000
 
 #ifndef FIBMODE
 #define FIBMODE 1
@@ -89,8 +89,8 @@ static int is_in_ht(loff_t *offset)
 {
     int key = (int) *(offset);
     if (hlist_empty(&htable[key])) {
-        printk(KERN_INFO "No find offset = %d in thread %d\n", key,
-               current->pid);
+        // printk(KERN_INFO "No find offset = %d in thread %d\n", key,
+        //        current->pid);
         return 0; /* no in hash table */
     }
     return 1;
@@ -124,18 +124,23 @@ static ssize_t fib_read(struct file *file,
     /* critical section */
     mutex_lock(&fib_mutex);
     if (is_in_ht(offset)) {
-        printk(KERN_INFO "find offset = %d in thread %d\n", key, current->pid);
+        // printk(KERN_INFO "find offset = %d in thread %d\n", key,
+        // current->pid);
+        fib_kt = ktime_get();
         fib = hlist_entry(htable[key].first, hdata_node, list)->data;
+        fib_kt = ktime_sub(ktime_get(), fib_kt);
     } else {
         fib = bn_alloc(1);
         dnode = kcalloc(1, sizeof(hdata_node), GFP_KERNEL);
         if (dnode == NULL)
             printk("kcalloc failed \n");
         mode_select();
+        fib_kt = ktime_get();
         fib_method(fib, *offset);
         dnode->data = fib;
         INIT_HLIST_NODE(&dnode->list);
         hlist_add_head(&dnode->list, &htable[key]);  // add to hash table
+        fib_kt = ktime_sub(ktime_get(), fib_kt);
     }
     mutex_unlock(&fib_mutex);
 

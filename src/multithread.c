@@ -5,23 +5,29 @@
 #include <string.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <time.h>
 #define __USE_GNU
 #include <unistd.h>
 
 
 #define FIB_DEV "/dev/fibonacci"
+#define CLOCKID CLOCK_MONOTONIC
 #define NTHREAD 10
 
 pthread_mutex_t plock;
 
+long get_ntime()
+{
+    struct timespec tmp;
+    clock_gettime(CLOCKID, &tmp);
+    return tmp.tv_sec * 1e9 + tmp.tv_nsec;
+}
+
 void *thread_handler(void *x)
 {
-    // cppcheck-suppress variableScope
-    long long sz;
-
-    int ktid = syscall(__NR_gettid);
 
     char buf[256];
+    char write_buf[] = "testing writing";
     int offset = 1000; /* TODO: try test something bigger than the limit */
 
     int fd = open(FIB_DEV, O_RDWR);
@@ -32,13 +38,17 @@ void *thread_handler(void *x)
     }
 
     for (int i = 0; i <= offset; i++) {
+        long ut, kt;
+
         lseek(fd, i, SEEK_SET);
-        // cppcheck-suppress unreadVariable
-        sz = read(fd, buf, 1);
-        printf("TID = %d, Reading from " FIB_DEV
-               " at offset %d, returned the sequence "
-               "%s.\n",
-               ktid, i, buf);
+        pthread_mutex_lock(&plock);
+        ut = get_ntime();
+        read(fd, buf, 1);
+        ut = get_ntime() - ut;
+        kt = write(fd, write_buf, strlen(write_buf));
+        pthread_mutex_unlock(&plock);
+        printf("Time = %ld %ld %ld\n", ut, kt,
+               ut - kt);  // user | kernel | kernel to user
     }
     close(fd);
 }
@@ -48,11 +58,11 @@ int main()
     pthread_t pt[NTHREAD];
     for (int i = 0; i < NTHREAD; i++) {
         pthread_create(&pt[i], NULL, thread_handler, NULL);
-        printf("Create thread ID = %ld\n", pt[i]);
+        // printf("Create thread ID = %ld\n", pt[i]);
     }
     for (int i = 0; i < NTHREAD; i++) {
         pthread_join(pt[i], NULL);
-        printf("Join thread ID = %ld\n", pt[i]);
+        // printf("Join thread ID = %ld\n", pt[i]);
     }
     return 0;
 }

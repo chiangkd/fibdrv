@@ -18,9 +18,9 @@ long get_ntime()
 
 int main()
 {
-    char buf[256];
+    char buf[10000];
     char write_buf[] = "testing writing";
-    int offset = 1000; /* TODO: try test something bigger than the limit */
+    int offset = 10000; /* TODO: try test something bigger than the limit */
 
     int fd = open(FIB_DEV, O_RDWR);
     if (fd < 0) {
@@ -29,6 +29,18 @@ int main()
     }
 
     for (int i = 0; i <= offset; i++) {
+        long ut, kt;
+
+        lseek(fd, i, SEEK_SET);
+        ut = get_ntime();
+        read(fd, buf, 1);
+        ut = get_ntime() - ut;
+        kt = write(fd, write_buf, strlen(write_buf));
+        printf("Time = %ld %ld %ld\n", ut, kt,
+               ut - kt);  // user | kernel | kernel to user
+    }
+
+    for (int i = offset; i >= 0; i--) {
         long ut, kt;
 
         lseek(fd, i, SEEK_SET);
