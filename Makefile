@@ -10,6 +10,10 @@ ifneq ($(FIBMODE),)
 ccflags-y += -D FIBMODE=$(strip $(FIBMODE))
 endif
 
+ifneq ($(NOHASH),0)
+ccflags-y += -D NOHASH=$(strip $(NOHASH))
+endif
+
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 

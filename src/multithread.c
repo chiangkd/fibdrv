@@ -32,8 +32,7 @@ void *thread_handler(void *x)
 
     int fd = open(FIB_DEV, O_RDWR);
     if (fd < 0) {
-        printf("thread ID - %d Failed to open character device\n", ktid);
-        // perror("Failed to open character device");
+        perror("Failed to open character device");
         exit(1);
     }
 

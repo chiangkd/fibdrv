@@ -29,6 +29,10 @@ MODULE_VERSION("0.1");
 #define FIBMODE 1
 #endif
 
+#ifndef NOHASH
+#define WITHHASH 1
+#endif
+
 typedef struct _hdata_node {
     bn *data;
     struct hlist_node list;
@@ -85,6 +89,7 @@ static void mode_select(void)
     }
 }
 
+#ifdef WITHHASH
 static int is_in_ht(loff_t *offset)
 {
     int key = (int) *(offset);
@@ -95,6 +100,7 @@ static int is_in_ht(loff_t *offset)
     }
     return 1;
 }
+#endif
 
 static void release_memory(void)
 {
@@ -116,34 +122,47 @@ static ssize_t fib_read(struct file *file,
                         size_t size,
                         loff_t *offset)
 {
+
+
+    /* critical section */
+    mutex_lock(&fib_mutex);
+#ifdef WITHHASH
     char *p = NULL;
     size_t len = 0, left = 0;
     bn *fib = NULL;
     int key = (int) *offset;
-
-    /* critical section */
-    mutex_lock(&fib_mutex);
+    fib_kt = ktime_get();
     if (is_in_ht(offset)) {
         // printk(KERN_INFO "find offset = %d in thread %d\n", key,
         // current->pid);
-        fib_kt = ktime_get();
         fib = hlist_entry(htable[key].first, hdata_node, list)->data;
-        fib_kt = ktime_sub(ktime_get(), fib_kt);
     } else {
         fib = bn_alloc(1);
         dnode = kcalloc(1, sizeof(hdata_node), GFP_KERNEL);
         if (dnode == NULL)
             printk("kcalloc failed \n");
         mode_select();
-        fib_kt = ktime_get();
         fib_method(fib, *offset);
         dnode->data = fib;
         INIT_HLIST_NODE(&dnode->list);
         hlist_add_head(&dnode->list, &htable[key]);  // add to hash table
-        fib_kt = ktime_sub(ktime_get(), fib_kt);
     }
+    fib_kt = ktime_sub(ktime_get(), fib_kt);
+#else
+    /* No hash table code */
+    bn *fib = bn_alloc(1);
+    // return (ssize_t) fib_sequence(*offset);
+    mode_select();
+    fib_kt = ktime_get();
+    /* multiple method under test */
+    fib_method(fib, *offset);
+    fib_kt = ktime_sub(ktime_get(), fib_kt);
+    char *p = bn_to_string(fib);
+    size_t len = strlen(p) + 1;
+    size_t left = copy_to_user(buf, p, len);
+    // printk(KERN_DEBUG "fib(%d): %s\n", (int) *offset, p);
+#endif
     mutex_unlock(&fib_mutex);
-
     p = bn_to_string(fib);
     len = strlen(p) + 1;
     left = copy_to_user(buf, p, len);
