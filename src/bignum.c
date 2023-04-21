@@ -363,9 +363,7 @@ static bn_data _mult_partial(const bn_data *a,
     bn_data carry = 0;
     for (int i = 0; i < asize; i++) {
         bn_data high, low;
-        bn_data_tmp prod = (bn_data_tmp) a[i] * k;
-        low = prod;
-        high = prod >> DIGITS;
+        __asm__("mulq %3" : "=a"(low), "=d"(high) : "%0"(a[i]), "rm"(k));
         carry = high + ((low += carry) < carry);
         carry += ((c[i] += low) < low);
     }
