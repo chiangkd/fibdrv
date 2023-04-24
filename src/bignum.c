@@ -115,7 +115,7 @@ int bn_free(bn *src)
  * return 0 on success, -1 on error
  * data lose IS neglected when shinking the size
  */
-static int bn_resize(bn *src, size_t size)
+int bn_resize(bn *src, size_t size)
 {
     if (!src)
         return -1;

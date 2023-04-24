@@ -52,6 +52,13 @@ bn *bn_alloc(size_t size);
 int bn_free(bn *src);
 
 /*
+ * resize bn
+ * return 0 on success, -1 on error
+ * data lose IS neglected when shinking the size
+ */
+int bn_resize(bn *src, size_t size);
+
+/*
  * copy the value from src to dest
  * return 0 on success, -1 on error
  */
